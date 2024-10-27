@@ -1,15 +1,21 @@
 package main
 
 import (
-	"fmt"
-	appKafka "./kafka"
+	"github.com/gofiber/fiber/v2"
+	"golangapi/api"
+	"golang/kafka"
+	"golang/utils"
 )
 
 func main() {
 
-	fmt.Println("okay");
-	appKafka()
-	fmt.Println("Kafka has been started...")
+	app := fiber.New()
+	utils.SetupLogger()
 
-	time.Sleep(10 * time.Minute)
+	kafka.InitializeProducer()
+	kafka.InitializeConsumer()
+
+	api.SetupRoutes(app)
+
+	log.Fatal(app.Listen(":3000"))
 }
