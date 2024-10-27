@@ -26,5 +26,5 @@ consuming messages:
 
 # Testing the API endpoints
 - build docker images - docker-compose build
-- run docker = docker-compose up
+- run docker - docker-compose up
 - Test functionality via Postman, Insomnia, etc
