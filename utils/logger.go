@@ -7,6 +7,6 @@ import (
 var log = logrus.New()
 
 func SetupLogger() {
-	leg.SetFormatted(&logrus.JSONFormatter{})
+	log.SetFormatter(&logrus.JSONFormatter{})
 	log.SetLevel(logrus.InfoLevel)
 }

@@ -1,6 +1,8 @@
 package streaming
 
 import (
+	"time"
+	
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -11,7 +13,7 @@ func StreamResults(c *fiber.Ctx) error {
 
 	for {
 		c.Write([]byte("data: Your message here \n\n"))
-		c.Context().Flush()
+		// c.Context().Flush()
 		time.Sleep(1 * time.Second)
 	}
 }

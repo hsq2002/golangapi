@@ -1,62 +1,41 @@
-package main
+package kafka
 
 import (
-	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
+	"log"
 
 	"github.com/IBM/sarama"
 )
 
-func main() {
-	topic := "comments"
-	consumer, err := connectConsumer([]string{"localhost29092"})
+var consumer sarama.Consumer
+
+func InitializeConsumer(brokersUrl []string) error {
+	var err error
+	consumer, err = sarama.NewConsumer(brokersUrl, nil)
 	if err != nil {
-		panic(err)
+		return err
 	}
-
-	partitionConsumer, err := consumer.ConsumePartition(topic, 0, sarama.OffsetOldest)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println("consumer started")
-	sigchan := make(chan os.Signal, 1)
-	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
-
-	msgCount := 0
-
-	doneCh := make(chan struct{})
-
-	go func() {
-		for {
-			select {
-			case err:= <-partitionConsumer.Errors():
-				fmt.Println(err)
-
-		case msg:= <-partitionConsumer.Messages():
-			msgCount++
-			fmt.Printf("Received message Count: %d: | Topic(%s) | Message(%s)n", msgCount, string(msg.Topic), string(msg.Value))
-		case <-sigchan:
-			fmt.Println("Interruption detected")
-			doneCh <- struct{}{}
-		}
-	}
-	}()
-		<-doneCh
-		fmt.Println("Processed", msgCount, "messages")
-		if err := consumer.Close(); err != nil {
-			panic(err)
-		}
+	return nil
 }
 
-func connectConsumer(brokerUrl []string)(sarama.Consumer, error) {
-	config := sarama.NewConfig()
-	config.Consumer.Return.Errors = true
-	conn, err := sarama.NewConsumer(brokerUrl, config)
+func ConsumeMessages(topic string) {
+	partitionList, err := consumer.Partitions(topic)
 	if err != nil {
-		return nil, err
+		log.Printf("Error getting partitions for topic %s: %v", topic, err)
+		return
 	}
-	return conn, nil
+
+	for _, partition := range partitionList {
+		pc, err := consumer.ConsumePartition(topic, partition, sarama.OffsetNewest)
+		if err != nil {
+			log.Printf("Error consuming partition %d: %v", partition, err)
+			return
+		}
+		defer pc.AsyncClose()
+
+		go func(pc sarama.PartitionConsumer) {
+			for message := range pc.Messages() {
+				log.Printf("Received message: %s\n", string(message.Value))
+			}
+		}(pc)
+	}
 }

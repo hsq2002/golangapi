@@ -1,4 +1,4 @@
-package main
+package kafka
 
 import (
 	"encoding/json"
@@ -9,18 +9,13 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-type Comment struct{
-	Text string `form: "text" json: text`
+type Comment struct {
+	Text string `form:"text" json:"text"`
 }
 
-func main() {
-	app := fiber.New()
-	api := app.Group("/api./v1")
-	api.Post("/comments", createComment)
-	app.Listen(":3000")
-}
+var producer sarama.SyncProducer
 
-func ConnectProducer(brokersUrl []string)(sarama.SyncProducer, error) {
+func ConnectProducer(brokersUrl []string) (sarama.SyncProducer, error) {
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
 	config.Producer.RequiredAcks = sarama.WaitForAll
@@ -34,12 +29,6 @@ func ConnectProducer(brokersUrl []string)(sarama.SyncProducer, error) {
 }
 
 func PushCommentToQueue(topic string, message []byte) error {
-	brokersUrl:= []string{"localhost:29092"}
-	producer, err := ConnectProducer(brokersUrl)
-	if err != nil {
-		return err
-	}
-	defer producer.Close()
 	msg := &sarama.ProducerMessage{
 		Topic: topic,
 		Value: sarama.StringEncoder(message),
@@ -54,32 +43,49 @@ func PushCommentToQueue(topic string, message []byte) error {
 	return nil
 }
 
+func InitializeProducer(brokersUrl []string) error {
+	var err error
+	producer, err = ConnectProducer(brokersUrl)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func SetupRoutes(app *fiber.App) {
+	api := app.Group("/api/v1")
+	api.Post("/comments", createComment)
+}
+
 func createComment(c *fiber.Ctx) error {
 	cmt := new(Comment)
 	if err := c.BodyParser(cmt); err != nil {
 		log.Println(err)
 		c.Status(400).JSON(&fiber.Map{
 			"success": false,
-			"message": err,
+			"message": err.Error(),
 		})
 		return err
 	}
 	cmtInBytes, err := json.Marshal(cmt)
-	PushCommentToQueue("comments", cmtInBytes)
-
-	err = c.JSON(&fiber.Map{
-		"success": true,
-		"message": "Comment pushed successfully",
-		"comment": cmt,
-	})
-
 	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	err = PushCommentToQueue("comments", cmtInBytes)
+	if err != nil {
+		log.Println(err)
 		c.Status(500).JSON(&fiber.Map{
-			"Success": false,
-			"message": "Error creating product",
+			"success": false,
+			"message": "Error pushing comment to queue",
 		})
 		return err
 	}
 
-	return err
+	return c.JSON(&fiber.Map{
+		"success": true,
+		"message": "Comment pushed successfully",
+		"comment": cmt,
+	})
 }
